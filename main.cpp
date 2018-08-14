@@ -1,3 +1,5 @@
+#include "pacman.hpp"
+
 #include <sdlpp/sdlpp.hpp>
 #include <shade/obj.hpp>
 #include <shade/shader_program.hpp>
@@ -8,8 +10,29 @@
 #define GL_GLEXT_PROTOTYPES 1
 #include <SDL_opengl.h>
 
+static const char Level[] = "HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH"
+                            "H...................................H.H............H"
+                            "H.HHHHHHHHHHHHHHHHH.HHHHHH.HHHHHHH..H.H............H"
+                            "H........................H.H.....H..H.H............H"
+                            "H.H.HHH.H.H.H..H.H..H..H.H.H.......................H"
+                            "H.H..H..H.H.HHHH.HHHHHHHHH.HHHHHHH..H.H............H"
+                            "H.H.HHH.H.H......H...............H..H.H............H"
+                            "H.H..H..H.H.HHHH.H.HHHHHHHHHHHHH.H..H.H............H"
+                            "H.H.HHH.H.H........H...........H.H..H.HHHHHHH.HHHHHH"
+                            "H.H..H..H.H.HHHH.H.H...........H.H.................H"
+                            "H.H.HHH.H.H......H.HHHHHHHH.HHHH.H..H.H.H.H.H.H....H"
+                            "H.H..H..H.H.HHHH.H...............H..H.H.H.H.H.H.HH.H"
+                            "H................HHHHHHHHH.HHHHHHH..H.H.H.H.H.H....H"
+                            "H..HHHHHHHHHHHHH.H.......H.H.....H..H.H...H.H.H.HH.H"
+                            "H..................................................H"
+                            "H..HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH..H.H.H.H.H.H.HH.H"
+                            "H...................................H.H.H.H........H"
+                            "HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH";
+static const auto LevelWidth = 52;
+
 int main()
 {
+  static_assert((sizeof(Level) - 1) % LevelWidth == 0, "Incorrect level width");
   sdl::Init init(SDL_INIT_EVERYTHING);
   const auto Width = 1280;
   const auto Height = 720;
@@ -21,16 +44,28 @@ int main()
   auto done = false;
   eventHandler.quit = [&done](const SDL_QuitEvent &) { done = true; };
   TextureLibrary textureLibrary(renderer.get());
-  Obj pacman(textureLibrary, "pacman");
+  std::string level = Level;
+  Pacman pacman(textureLibrary,
+                [&level](int x, int y) -> char & { return level[x + y * LevelWidth]; });
+  eventHandler.keyDown = [&pacman](const SDL_KeyboardEvent &e) {
+    switch (e.keysym.sym)
+    {
+    case SDLK_LEFT: pacman.setDirection(Pacman::Direction::Left); break;
+    case SDLK_RIGHT: pacman.setDirection(Pacman::Direction::Right); break;
+    case SDLK_UP: pacman.setDirection(Pacman::Direction::Up); break;
+    case SDLK_DOWN: pacman.setDirection(Pacman::Direction::Down); break;
+    }
+  };
   Obj dot(textureLibrary, "dot");
-  glm::mat4 Projection =
-    glm::perspective(glm::radians(45.0f), (float)Width / (float)Height, 0.1f, 100.0f);
-  glm::mat4 View = glm::lookAt(glm::vec3(0, -10, 3),
-                               glm::vec3(0, 0, 0), // and looks at the origin
-                               glm::vec3(0, 0, 1)
-  );
+  Obj wall(textureLibrary, "wall");
+  Var<glm::mat4> projection(
+    "projection",
+    glm::perspective(glm::radians(45.0f), (float)Width / (float)Height, 0.1f, 100.0f));
+  float camX = 0;
+  float camY = 0;
+  Var<glm::mat4> view("view");
   Var<glm::mat4> mvp("mvp");
-  ShaderProgram pacmanShaider("pacman", "pacman", mvp);
+  ShaderProgram pacmanShaider("pacman", "pacman", mvp, projection, view);
 
   while (!done)
   {
@@ -38,14 +73,32 @@ int main()
     glClearColor(0.0f, 0.5f, 1.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     pacmanShaider.use();
-    mvp = Projection * View * glm::mat4(1);
-    mvp.update();
 
-    pacman.activate();
+    camX = 0.01f * pacman.getDisplayX() + 0.99f * camX;
+    camY = 0.01f * pacman.getDisplayY() + 0.99f * camY;
+    view = glm::lookAt(glm::vec3(camX * 2.0f, -20, camY * 2.0f),
+                       glm::vec3(camX * 2.0f, 0, camY * 2.0f), // and looks at the origin
+                       glm::vec3(0, 0, 1));
+    projection.update();
+    view.update();
 
-    for (float x = 1.0f; x < 10.0f; x += 2.0f)
+    pacman.draw(mvp);
+
+    for (size_t y = 0; y < (sizeof(Level) - 1) / LevelWidth; ++y)
+      for (size_t x = 0; x < LevelWidth; ++x)
+      {
+        mvp = glm::translate(glm::vec3(2.0f * x, 0.0f, 2.0f * y));
+        mvp.update();
+        switch (level[x + y * LevelWidth])
+        {
+        case 'H': wall.activate(); break;
+        case '.': dot.activate(); break;
+        }
+      }
+
+    for (float x = 2.0f; x < 10.0f; x += 2.0f)
     {
-      mvp = Projection * View * glm::translate(glm::vec3(x, 0.0f, 0.0f));
+      mvp = glm::translate(glm::vec3(x, 0.0f, 0.0f));
       mvp.update();
       dot.activate();
     }

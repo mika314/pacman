@@ -34,6 +34,6 @@ mat4 translate(vec3 t)
 
 void main()
 {
-  gl_Position = mvp * rotate(-3.1415926 / 2, vec3(1, 0, 0)) * vec4(vertexPosition_modelspace, 1.0);
+  gl_Position = projection * view * mvp * rotate(3.1415926 / 2, vec3(1, 0, 0)) * vec4(vertexPosition_modelspace, 1.0);
   uv = vertexUV;
 }
