@@ -1,5 +1,8 @@
 #include "pacman.hpp"
 
+#include "coefficient_registry.hpp"
+#include "text.hpp"
+#include "log.hpp"
 #include <sdlpp/sdlpp.hpp>
 #include <shade/obj.hpp>
 #include <shade/shader_program.hpp>
@@ -30,13 +33,16 @@ static const char Level[] = "HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
                             "HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH";
 static const auto LevelWidth = 52;
 
+COEFF(CameraMoveK, 0.06f);
+
 int main()
 {
   static_assert((sizeof(Level) - 1) % LevelWidth == 0, "Incorrect level width");
+
   sdl::Init init(SDL_INIT_EVERYTHING);
   const auto Width = 1280;
   const auto Height = 720;
-  sdl::Window window("Pacman", 64, 126, Width, Height, SDL_WINDOW_BORDERLESS | SDL_WINDOW_OPENGL);
+  sdl::Window window("Pacman", 64, 100, Width, Height, SDL_WINDOW_OPENGL);
   sdl::Renderer renderer(window.get(), -1, SDL_RENDERER_PRESENTVSYNC);
   sdl::EventHandler eventHandler;
   glEnable(GL_DEPTH_TEST);
@@ -45,8 +51,10 @@ int main()
   eventHandler.quit = [&done](const SDL_QuitEvent &) { done = true; };
   TextureLibrary textureLibrary(renderer.get());
   std::string level = Level;
-  Pacman pacman(textureLibrary,
-                [&level](int x, int y) -> char & { return level[x + y * LevelWidth]; });
+  Pacman pacman(textureLibrary, [&level](int x, int y) -> char & {
+    return level[x + y * LevelWidth];
+  });
+  Text coeffText(textureLibrary, "font");
   eventHandler.keyDown = [&pacman](const SDL_KeyboardEvent &e) {
     switch (e.keysym.sym)
     {
@@ -54,8 +62,21 @@ int main()
     case SDLK_RIGHT: pacman.setDirection(Pacman::Direction::Right); break;
     case SDLK_UP: pacman.setDirection(Pacman::Direction::Up); break;
     case SDLK_DOWN: pacman.setDirection(Pacman::Direction::Down); break;
+    case SDLK_PAGEUP:
+      CoefficientRegistry::instance().rotate(true);
+      LOG(CoefficientRegistry::instance().display());
+      break;
+    case SDLK_PAGEDOWN:
+      CoefficientRegistry::instance().rotate(false);
+      LOG(CoefficientRegistry::instance().display());
+      break;
     }
   };
+  eventHandler.mouseWheel = [](const SDL_MouseWheelEvent& e)
+    {
+      CoefficientRegistry::instance().change(e.y);
+      LOG(CoefficientRegistry::instance().display());
+    };
   Obj dot(textureLibrary, "dot");
   Obj wall(textureLibrary, "wall");
   Var<glm::mat4> projection(
@@ -74,8 +95,9 @@ int main()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     pacmanShaider.use();
 
-    camX = 0.01f * pacman.getDisplayX() + 0.99f * camX;
-    camY = 0.01f * pacman.getDisplayY() + 0.99f * camY;
+
+    camX = CameraMoveK * pacman.getDisplayX() + (1.0f - CameraMoveK) * camX;
+    camY = CameraMoveK * pacman.getDisplayY() + (1.0f - CameraMoveK) * camY;
     view = glm::lookAt(glm::vec3(camX * 2.0f, -20, camY * 2.0f),
                        glm::vec3(camX * 2.0f, 0, camY * 2.0f), // and looks at the origin
                        glm::vec3(0, 0, 1));

@@ -1,6 +1,10 @@
 #include "pacman.hpp"
+#include "coefficient_registry.hpp"
 
 #include <shade/obj.hpp>
+
+COEFF(PacmanMoveK, 0.2f);
+COEFF(FPS, 40);
 
 Pacman::Pacman(TextureLibrary &textureLibrary, std::function<char &(int, int)> &&aMap):
   map(aMap)
@@ -21,9 +25,11 @@ float Pacman::getDisplayY() const
 
 void Pacman::draw(Var<glm::mat4> &mvp)
 {
-  mvp = glm::translate(glm::vec3(2.0f * displayX, 0.0f, 2.0f * displayY));
+  mvp =
+    glm::translate(glm::vec3(2.0f * displayX, 0.0f, 2.0f * displayY)) *
+    glm::rotate(static_cast<float>(M_PI / 2.0f * displayDirection), glm::vec3(0.0f, 1.0f, 0.0f));
   mvp.update();
-  auto f = frame++ / 3 % (frames.size() * 2);
+  auto f = (frame++ * FPS / 60) % (frames.size() * 2);
   if (f >= frames.size())
     f = frames.size() * 2 - 1 - f;
   auto&& tail = map(x, y);
@@ -55,8 +61,14 @@ void Pacman::draw(Var<glm::mat4> &mvp)
     y = newY;
   }
 
-  displayX = 0.9f * displayX + 0.1f * x;
-  displayY = 0.9f * displayY + 0.1f * y;
+
+  displayX = (1.0f - PacmanMoveK) * displayX + PacmanMoveK * x;
+  displayY = (1.0f - PacmanMoveK) * displayY + PacmanMoveK * y;
+  displayDirection = (1.0f - PacmanMoveK) * displayDirection + PacmanMoveK * static_cast<float>(direction);
+  if (displayDirection - static_cast<float>(direction) > 2.0f)
+    displayDirection -= 4.0f;
+  if (displayDirection - static_cast<float>(direction) < -2.0f)
+    displayDirection += 4.0f;
 }
 
 void Pacman::setDirection(Direction value)
