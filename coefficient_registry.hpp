@@ -10,6 +10,7 @@ class CoefficientRegistry
 {
 public:
   static CoefficientRegistry &instance();
+
   template <typename T>
   void add(T &value, const char *name)
   {
@@ -18,9 +19,11 @@ public:
     data.push_back(std::make_unique<Coefficient<T>>(value, name));
     currentIdx = data.size() - 1;
   }
+
   std::string display() const;
-  void rotate(bool);
   void change(int);
+  void load();
+  void rotate(bool);
 
 private:
   CoefficientRegistry() = default;

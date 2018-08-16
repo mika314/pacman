@@ -3,7 +3,7 @@
 
 #include <shade/obj.hpp>
 
-COEFF(PacmanMoveK, 0.2f);
+COEFF(PacmanMoveK, 0.13f);
 COEFF(FPS, 40);
 
 Pacman::Pacman(TextureLibrary &textureLibrary, std::function<char &(int, int)> &&aMap):
